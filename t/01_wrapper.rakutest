@@ -1,0 +1,74 @@
+use Test;
+use lib 'lib';
+use Tokenizers::Wrapper;
+use NativeCall;
+
+plan 5;
+
+# Load the JSON tokenizer config
+my $json-path = "t/fixtures/tokenizer.json";
+ok $json-path.IO.e, "Tokenizer fixture exists";
+
+# Load JSON as bytes
+my $json = Buf.new(slurp('t/fixtures/tokenizer.json').encode('utf8'));
+my $tokenizer = tokenizers_new_from_str(nativecast(Pointer[uint8], $json), $json.bytes);
+ok $tokenizer.defined, "Tokenizer successfully created";
+
+my $text = "Hello, world!".encode('utf8');
+
+# Holders for the returned pointer and length (each holds 1 element)
+my $out-ids = CArray[Pointer[uint32]].new;
+$out-ids[0] = Pointer[uint32];  # dummy init
+
+my $out-len = CArray[size_t].new;
+$out-len[0] = 0;
+
+# Call FFI
+tokenizers_encode(
+    $tokenizer,
+    nativecast(Pointer[uint8], $text),
+    $text.bytes,
+    1,
+    $out-ids,
+    $out-len
+);
+
+# Retrieve and slice output
+my Pointer[uint32] $ids-raw = $out-ids[0];
+my size_t $num-tokens       = $out-len[0];
+my @ids = $ids-raw[^$num-tokens];
+
+is @ids.elems, 5, "Got expected number of tokens";
+
+tokenizers_decode($tokenizer, $ids-raw, $num-tokens, 1);
+
+my $out-str = CArray[Pointer[uint8]].new;
+$out-str[0] = Pointer[uint8];
+my $out-str-len = CArray[size_t].new;
+$out-str-len[0] = 0;
+
+tokenizers_get_decode_str($tokenizer, $out-str, $out-str-len);
+
+my Pointer[uint8] $str-raw = $out-str[0];
+my size_t $str-len         = $out-str-len[0];
+my $decoded = $str-raw[^$str-len].map(*.chr).join;
+
+is $decoded, "Hello, world!", "Decoded string (via get_decode_str) matches";
+
+tokenizers_free_cstring($str-raw);
+
+$out-str[0]     = Pointer[uint8];
+$out-str-len[0] = 0;
+
+tokenizers_decode_and_get($tokenizer, $ids-raw, $num-tokens, 1, $out-str, $out-str-len);
+
+$str-raw = $out-str[0];
+$str-len = $out-str-len[0];
+$decoded = $str-raw[^$str-len].map(*.chr).join;
+
+is $decoded, "Hello, world!", "Decoded string (via decode_and_get) matches";
+
+tokenizers_free_cstring($str-raw);
+tokenizers_free_ids($ids-raw, $num-tokens);
+tokenizers_free($tokenizer);
+

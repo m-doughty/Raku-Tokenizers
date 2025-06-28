@@ -1,0 +1,32 @@
+use Test;
+use lib 'lib';
+use Tokenizers;
+
+plan 10;
+
+my $json-path = "t/fixtures/tokenizer.json";
+ok $json-path.IO.e, "Tokenizer fixture exists";
+
+my $json = slurp($json-path);
+my $tokenizer = Tokenizers.new-from-json($json);
+ok $tokenizer.defined, "Tokenizer successfully created";
+
+my $text = "Hello, world!";
+my @tokens = $tokenizer.encode($text, :add-special-tokens(False));
+is-deeply @tokens, [22177, 1044, 4304, 1033], "correctly encoded (no special tokens)";
+my @tokens2 = $tokenizer.encode($text);
+is-deeply @tokens2, [1, 22177, 1044, 4304, 1033], "correctly encoded";
+
+is $tokenizer.count($text), @tokens2.elems, "Count matches length (no special tokens)";
+is $tokenizer.count($text, :add-special-tokens(False)), @tokens.elems, "Count matches encode length";
+
+my $decoded = $tokenizer.decode(@tokens2, :skip-special-tokens(True));
+isa-ok $decoded, Str, "Decoded output is a string (no special tokens)";
+my $decoded2 = $tokenizer.decode(@tokens2);
+isa-ok $decoded2, Str, "Decoded output is a string";
+
+is $decoded, "Hello, world!", "Decoded string includes original text (no special tokens)";
+is $decoded2, "<s>Hello, world!", "Decoded string includes original text"; 
+
+done-testing;
+

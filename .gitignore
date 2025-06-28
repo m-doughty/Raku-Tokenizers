@@ -1,0 +1,81 @@
+# === Rust ===
+vendor/tokenizers-ffi/target/
+/Cargo.lock
+**/*.rlib
+**/*.dSYM/
+
+# === C ===
+vendor/tokenizers-ffi/build/
+*.o
+*.a
+*.so
+*.so.*
+*.dll
+*.dylib
+*.exe
+*.out
+.clangd
+
+# === Raku ===
+resources/lib/libtokenizersffi.*
+resources/include/tokenizers_ffi.h
+lib/.precomp
+
+# === Shared Object Dumps & C Linker Junk ===
+*.obj
+*.lib
+*.exp
+*.pdb
+
+# === Logs, core dumps, etc ===
+*.log
+core
+*.core
+*.stackdump
+
+# === macOS ===
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# === Neovim/Vim ===
+*.swp
+*.swo
+*.swn
+*.un~
+*~
+
+# === Emacs ===
+*~
+*.elc
+
+# === JetBrains (CLion, IntelliJ, etc) ===
+.idea/
+*.iml
+
+# === VSCode ===
+.vscode/
+
+# === Other editors ===
+*.kate-swp
+.netrwhist
+
+# === Checkpoint files ===
+*.bak
+*.tmp
+*.old
+
+# === Git ===
+*.orig
+*.rej
+
+# === Python (if used in tooling/tests) ===
+__pycache__/
+*.py[cod]
+
+# === Homebrew builds ===
+*.dSYM/
+*.pkg/
+

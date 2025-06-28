@@ -1,0 +1,32 @@
+[package]
+name = "tokenizers_ffi"
+version = "0.1.0"
+edition = "2021"
+authors = ["Matt Doughty <matt@apogee.guru>"]
+description = "FFI wrapper around HuggingFace Tokenizers"
+license = "Artistic-2.0"
+include = [
+    "src/**",
+    "include/tokenizers_ffi.h",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE"
+]
+
+[dependencies]
+tokenizers = "0.21"  # Adjust version to match your tokenizer.json
+libc = "0.2"
+
+[lib]
+name = "tokenizers_ffi"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[build-dependencies]
+cc = "1.0"
+
+[[test]]
+name = "tokenizers"
+path = "tests/rust/tokenizers.rs"
+harness = true
+

@@ -1,0 +1,21 @@
+{
+  "name": "Tokenizers",
+  "version": "0.1.0",
+  "auth": "zef:apogee",
+  "build": "Build.rakumod",
+  "description": "Wrapper module for Huggingface Tokenizers",
+  "authors": ["Matt Doughty"],
+  "license": "Artistic-2.0",
+  "provides": {
+    "Tokenizers": "lib/Tokenizers.rakumod",
+    "Tokenizers::Wrapper": "lib/Tokenizers/Wrapper.rakumod"
+  },
+  "depends": [],
+  "source-url": "https://github.com/m-doughty/Raku-Tokenizers.git",
+  "tags": ["tokenizers", "llm", "ai"],
+  "support": {
+    "bugtracker": "https://github.com/m-doughty/Raku-Tokenizers/issues",
+    "source": "https://github.com/m-doughty/Raku-Tokenizers"
+  }
+}
+
