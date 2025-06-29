@@ -3,6 +3,7 @@ class Build {
         self!check-dependencies;
 
         say "🏗️  Building tokenizers-ffi C/Rust library via make";
+        say "Staging to $dist-path.";
 
         my $status = shell "cd vendor/tokenizers-ffi && make";
         die "❌ Failed to build tokenizers-ffi via make" if $status != 0;

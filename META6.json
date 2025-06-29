@@ -1,6 +1,6 @@
 {
   "name": "Tokenizers",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "auth": "zef:apogee",
   "build": "Build.rakumod",
   "description": "Wrapper module for Huggingface Tokenizers",
@@ -10,7 +10,15 @@
     "Tokenizers": "lib/Tokenizers.rakumod",
     "Tokenizers::Wrapper": "lib/Tokenizers/Wrapper.rakumod"
   },
-  "depends": [],
+  "depends": ["NativeCall"],
+  "resources": [
+    "include",
+    "lib",
+    "include/tokenizers_ffi.h",
+    "lib/libtokenizers_ffi.dylib",
+    "lib/libtokenizers_ffi.dll",
+    "lib/libtokenizers_ffi.so"
+  ],
   "source-url": "https://github.com/m-doughty/Raku-Tokenizers.git",
   "tags": ["tokenizers", "llm", "ai"],
   "support": {
