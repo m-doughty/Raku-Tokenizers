@@ -2,6 +2,8 @@
 
 ## DESCRIPTIONS
 
+**Note: This module has some build issues before 0.1.3 due to my poor understanding of zef & Build.rakumod. It should work post 0.1.3 without issues.**
+
 Tokenizers provides a high-level interface for interacting with Huggingface Tokenizers, based on my C ABI wrapper for it, [tokenizers-ffi](https://github.com/m-doughty/tokenizers-ffi).
 
 You must have a C compiler, the Rust compiler, and GNU Make installed to use this module.

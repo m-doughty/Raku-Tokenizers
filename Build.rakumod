@@ -22,6 +22,13 @@ class Build {
 
         copy "vendor/tokenizers-ffi/include/tokenizers_ffi.h",
              "$dist-path/resources/include/tokenizers_ffi.h";
+
+        for <libtokenizers_ffi.dylib libtokenizers_ffi.so libtokenizers_ffi.dll> -> $name {
+            my $path = "$dist-path/resources/lib/$name";
+            $path.IO.spurt("") unless $path.IO.f;
+        }
+
+        True;
     }
 
     method !check-dependencies {
