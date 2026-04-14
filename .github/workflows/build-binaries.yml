@@ -120,13 +120,19 @@ jobs:
           strip --strip-unneeded \
             target/${{ matrix.rust-targets }}/release/libtokenizers_ffi.so
 
+      # PowerShell on Windows — NOT bash. Git Bash prepends its own
+      # /usr/bin to PATH, ahead of the MSVC tooling that
+      # ilammy/msvc-dev-cmd set up. rustc then resolves `link.exe`
+      # to Git's POSIX `link` utility instead of MSVC's linker and
+      # fails with "/usr/bin/link: extra operand …". pwsh inherits
+      # the vcvars-set PATH correctly.
       - name: Build (Windows)
         if: runner.os == 'Windows'
-        shell: bash
+        shell: pwsh
         run: |
-          set -euxo pipefail
-          cd vendor/tokenizers-ffi
+          Set-Location vendor/tokenizers-ffi
           cargo build --release --target ${{ matrix.rust-targets }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # MSVC Release doesn't embed PDB; nothing to strip.
 
       # --- Rename + stage artefact ---------------------------------
