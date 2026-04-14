@@ -48,11 +48,20 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Install dependencies
-        run: zef install --/test --test-depends --deps-only .
+      # Full install (no --deps-only) so Build.rakumod actually
+      # runs — this is exactly the `zef install Tokenizers` flow
+      # that end users hit. If the prebuilt download or SHA verify
+      # is broken, install fails here and the test job turns red
+      # before we even get to the test runner.
+      - name: Install Tokenizers (runs Build.rakumod)
+        run: zef install --/test --test-depends .
 
       - name: Install App::Prove6
         run: zef install --/test App::Prove6
 
+      # No `-I.` — tests run against the installed module so
+      # %?RESOURCES resolves to the dylib that Build.rakumod just
+      # staged into the install location. Fixtures at t/fixtures/
+      # still work because prove6's CWD is the repo root.
       - name: Run tests
-        run: prove6 --verbose -I. t
+        run: prove6 --verbose t
