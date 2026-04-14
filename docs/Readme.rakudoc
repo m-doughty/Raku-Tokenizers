@@ -1,0 +1,156 @@
+=begin pod
+
+=head1 NAME
+
+Tokenizers - Raku bindings for HuggingFace Tokenizers via a
+native Rust cdylib
+
+=head1 SYNOPSIS
+
+=begin code :lang<raku>
+use Tokenizers;
+
+my $json = slurp 't/fixtures/tokenizer.json';
+my $tok  = Tokenizers.new-from-json($json);
+
+my @ids = $tok.encode('Hello, world!');   # (9906, 11, 1917, 0)
+say $tok.decode(@ids);                    # Hello, world!
+say $tok.count('Hello, world!');          # 4
+=end code
+
+=head1 DESCRIPTION
+
+C<Tokenizers> is a thin Raku wrapper around the HuggingFace
+C<tokenizers> Rust crate, exposed via a small FFI shim
+(C<libtokenizers_ffi>). You can load any C<tokenizer.json> produced
+by HuggingFace tooling — BPE, WordPiece, Unigram, SentencePiece,
+etc. — and encode/decode text or get token counts without running
+a Python transformer stack.
+
+Designed to be dropped into monorepos that do synthetic roleplay
+data generation, local-LLM token counting, or any pipeline where
+you already have a C<tokenizer.json> file and just want fast,
+lightweight tokenisation from Raku.
+
+=head1 INSTALLATION
+
+    zef install Tokenizers
+
+On install, C<Build.rakumod> tries two paths in order:
+
+=item B<Prebuilt binary download> from this repo's GitHub Releases
+  for the detected (OS, arch) pair. Statically-linked Rust cdylib
+  (macOS artefact is universal — arm64 + x86_64 slices), verified
+  against a SHA256 bundled in the distribution
+  (C<resources/checksums.txt>). Typically ~15 MB, ~2–10 seconds
+  on a decent connection. This is the default path when a matching
+  release exists.
+
+=item B<Source compile fallback> via C<cargo build --release> on
+  the vendored C<libtokenizers-ffi> crate. Used when no prebuilt is
+  available for the platform, when the download fails, when the
+  checksum doesn't match, or when the user has opted out of
+  prebuilts. Takes ~5–10 minutes from a cold cargo cache — the
+  HuggingFace tokenizers crate pulls in a sizeable dep tree.
+
+=head2 Supported prebuilt platforms
+
+=item macOS universal (arm64 + x86_64 slices in one dylib)
+=item Linux x86_64 glibc
+=item Linux aarch64 glibc
+=item Windows x86_64
+=item Windows arm64 (Copilot+ PCs, Snapdragon X)
+
+On platforms outside this list (Alpine musl, BSDs, i686, etc.) the
+fallback compile path runs automatically; you'll need C<cargo> and
+a C toolchain installed.
+
+=head2 Environment variables
+
+=item C<TOKENIZERS_BUILD_FROM_SOURCE=1> — skip the prebuilt path and
+  always compile from vendored source.
+=item C<TOKENIZERS_BINARY_ONLY=1> — refuse to fall back to compile
+  if the prebuilt is unavailable. Useful in CI where a 10× slower
+  install via surprise compile is worse than a loud failure.
+=item C<TOKENIZERS_BINARY_URL=<url>> — override the GitHub Releases
+  base URL. For private mirrors or air-gapped setups.
+=item C<TOKENIZERS_CACHE_DIR=<path>> — override the download cache
+  location. Defaults to C<$XDG_CACHE_HOME/Tokenizers-binaries/> or
+  C<~/.cache/Tokenizers-binaries/>.
+=item C<TOKENIZERS_LIB=<path>> — bypass C<%?RESOURCES> entirely and
+  load the library from an explicit path. Undocumented escape
+  hatch; you take full responsibility for ABI compatibility.
+
+=head2 Building from source (for devs)
+
+If you're hacking on the C<libtokenizers-ffi> crate itself rather
+than the Raku bindings, the Rust crate lives at
+C<vendor/tokenizers-ffi/>. The vendored C<Makefile> supports
+C<make>, C<make test>, C<make test-sanitize>. The Raku
+C<Build.rakumod>'s fallback path invokes cargo directly rather than
+going through the Makefile so it's insulated from Makefile-only
+dev targets.
+
+=head2 Binary release versioning
+
+Prebuilt binaries are tagged independently of the Raku distribution:
+
+    binaries-tokenizers-<upstream-version>-r<recipe-revision>
+
+e.g. C<binaries-tokenizers-0.1.0-r1>. The C<upstream-version>
+tracks the vendored C<libtokenizers-ffi> crate version;
+C<recipe-revision> bumps only when build flags change (target
+triples, strip options, platform additions) while the upstream
+library stays the same.
+
+C<Build.rakumod> reads the pinned binary tag from the top-level
+C<BINARY_TAG> file so a Raku-side bugfix release of C<Tokenizers>
+can ship without rebuilding binaries — users upgrading within the
+same binary tag get their download from the cache, not the network.
+
+=head1 API
+
+=head2 C<Tokenizers.new-from-json($json)>
+
+Builds a tokenizer from a HuggingFace C<tokenizer.json> string.
+Returns a C<Tokenizers> instance. Throws if the JSON is malformed
+or references an unknown tokenizer type.
+
+=head2 C<.encode($text, :$add-special-tokens = True --> List)>
+
+Tokenises C<$text> and returns a List of token IDs (C<UInt>).
+With C<:!add-special-tokens> you get just the content tokens —
+useful for concatenating into larger sequences.
+
+=head2 C<.decode(@ids, :$skip-special-tokens = False --> Str)>
+
+Reconstructs a string from a List of token IDs. With
+C<:skip-special-tokens> drops BOS/EOS/PAD tokens from the output.
+
+=head2 C<.count(Str $text, :$add-special-tokens = True --> Int)>
+
+Shortcut for C<.encode($text, :$add-special-tokens).elems>.
+
+=head2 Resource management
+
+The underlying Rust tokenizer is freed automatically via Raku's GC
+(C<DESTROY>). There's no explicit C<.dispose> today; if you need
+deterministic cleanup (long-running process holding many
+tokenizers) call C<$tok = Nil> to trigger collection.
+
+=head1 AUTHOR
+
+Matt Doughty
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright 2026 Matt Doughty
+
+This library is free software; you can redistribute it and/or modify
+it under the Artistic License 2.0.
+
+The vendored C<libtokenizers-ffi> crate is licensed under Artistic
+License 2.0. The HuggingFace C<tokenizers> crate it wraps is
+Apache-2.0.
+
+=end pod

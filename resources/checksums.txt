@@ -16,3 +16,9 @@
 # is empty or doesn't list the expected artefact, every prebuilt
 # lookup fails SHA verify and Build.rakumod falls back to compiling
 # from source — safe default, just slower.
+
+9e5dfe41d3b2f267a4a1b7f9eacb133ed854f050a95fe810cd295827de13d57f  libtokenizers_ffi-linux-aarch64-glibc.so
+d15fe26bf4679826455179179dbe258fed679204e60ae16ee8885aa784711bd6  libtokenizers_ffi-linux-x86_64-glibc.so
+40aa200f023aa7e1ab2528724b3e007c80abfe503f6426bd2cdedad11ad66e0e  libtokenizers_ffi-macos-universal.dylib
+45cd6dba9940f5ea2955068fb85eaf46d8d4fdcc7fd9dca0540063d498284f3f  libtokenizers_ffi-windows-arm64.dll
+0ada3e214fb24a187d9c026b4f448ed2dace806cefa21acc85e1efd6ba0e5dc3  libtokenizers_ffi-windows-x86_64.dll

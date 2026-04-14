@@ -17,8 +17,9 @@ vendor/tokenizers-ffi/build/
 .clangd
 
 # === Raku ===
-resources/lib/libtokenizersffi.*
+resources/lib/libtokenizers_ffi.*
 resources/include/tokenizers_ffi.h
+.precomp
 lib/.precomp
 
 # === Shared Object Dumps & C Linker Junk ===

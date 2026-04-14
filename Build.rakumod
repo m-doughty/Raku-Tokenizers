@@ -31,7 +31,7 @@ class Build {
     # --- Constants ------------------------------------------------------
 
     constant $DEFAULT-BASE-URL =
-        'https://github.com/m-doughty/Tokenizers-Raku/releases/download';
+        'https://github.com/m-doughty/Raku-Tokenizers/releases/download';
 
     my %PLATFORM-SLUGS =
         'darwin-arm64'    => 'macos-universal',

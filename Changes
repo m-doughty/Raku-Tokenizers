@@ -1,0 +1,36 @@
+Revision history for Tokenizers
+
+{{$NEXT}}
+
+0.2.0  2026-04-14T23:55:42+01:00
+    - Prebuilt-binary-first install path. Build.rakumod now attempts
+      to download a prebuilt .dylib / .so / .dll from the repo's
+      GitHub Releases for the detected (OS, arch) pair before
+      falling back to the existing `make` (cargo build --release)
+      source compilation. Shaves the ~5-minute cargo build from the
+      default install flow.
+    - SHA256 verification against bundled resources/checksums.txt;
+      refuses any prebuilt whose hash isn't recorded (hard security
+      boundary — no downloaded checksums trusted).
+    - Cache downloaded artefacts in $XDG_CACHE_HOME/Tokenizers-binaries/
+      (or $HOME/.cache/ fallback) so reinstalls skip the network.
+    - macOS publishes a universal dylib (arm64 + x86_64 slices in one
+      fat binary) built via lipo from per-slice cargo builds. One
+      macOS artefact covers both Apple architectures.
+    - New env knobs: TOKENIZERS_BUILD_FROM_SOURCE=1 to skip prebuilts;
+      TOKENIZERS_BINARY_ONLY=1 to refuse fallback; TOKENIZERS_BINARY_URL
+      to override the release base URL; TOKENIZERS_CACHE_DIR to
+      override cache location; TOKENIZERS_LIB for runtime lib path
+      override.
+    - New BINARY_TAG file at repo root as single source of truth for
+      the pinned binary release tag (binaries-tokenizers-<crate-ver>-
+      r<recipe-rev>), read by both Build.rakumod and the CI
+      workflow.
+    - New .github/workflows/build-binaries.yml: builds + publishes
+      prebuilt artefacts for five platforms (macOS universal, Linux
+      x86_64/aarch64 glibc, Windows x86_64/arm64) via Rust
+      cross-compilation targets on manual dispatch or binaries-*
+      tag push. Cargo cache keyed by Cargo.lock so repeat builds hit
+      warm caches.
+    - FFI lookup in Tokenizers::Wrapper now respects the
+      TOKENIZERS_LIB env override before falling back to %?RESOURCES.

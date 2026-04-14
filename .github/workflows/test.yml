@@ -1,0 +1,58 @@
+name: test
+
+on:
+  push:
+    branches:
+      - '*'
+    tags-ignore:
+      - '*'
+  pull_request:
+
+jobs:
+  raku:
+    strategy:
+      fail-fast: false
+      matrix:
+        # ARM Linux / ARM Windows intentionally omitted:
+        # Raku/setup-raku@v1 lacks prebuilt Rakudo tarballs for those
+        # platforms so we can't run Raku tests there. Tokenizers'
+        # ARM prebuilts are validated via build-binaries.yml
+        # (successful cargo build + correct symbol exports + checksum
+        # in the release). ARM end-to-end picks up when upstream Raku
+        # publishes ARM tarballs.
+        os:
+          - ubuntu-latest      # Linux x86_64 glibc
+          - macos-latest       # macOS arm64 (universal dylib)
+          - windows-latest     # Windows x86_64
+        raku-version:
+          - 'latest'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: Raku/setup-raku@v1
+        with:
+          raku-version: ${{ matrix.raku-version }}
+
+      # Rust toolchain is only needed as a belt-and-braces fallback
+      # in case Build.rakumod's prebuilt download fails for some
+      # reason. Without it, a download failure would propagate all
+      # the way through as an install error; with it, the fallback
+      # compile path has a working cargo.
+      - name: Install Rust toolchain (fallback compile path)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up MSVC (Windows fallback)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install dependencies
+        run: zef install --/test --test-depends --deps-only .
+
+      - name: Install App::Prove6
+        run: zef install --/test App::Prove6
+
+      - name: Run tests
+        run: prove6 --verbose -I. t
