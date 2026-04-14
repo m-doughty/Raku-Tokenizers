@@ -7,7 +7,18 @@ constant $libname = $os ~~ /darwin/ ?? 'libtokenizers_ffi.dylib' !!
 		    $os ~~ /win/    ?? 'libtokenizers_ffi.dll'   !!
 				       'libtokenizers_ffi.so';
 
+#| Resolve the tokenizers-ffi native library path. Precedence:
+#|
+#|     1. $TOKENIZERS_LIB — explicit override; full path to a
+#|        .dylib / .so / .dll. Undocumented escape hatch for custom
+#|        tokenizers-ffi builds; you take responsibility for ABI.
+#|     2. %?RESOURCES — staged at install time by Build.rakumod,
+#|        either from a prebuilt GitHub release or a local cargo
+#|        compile. This is the normal path.
 sub _libpath {
+	with %*ENV<TOKENIZERS_LIB> -> $override {
+		return $override if $override.chars && $override.IO.e;
+	}
 	%?RESOURCES{"lib/$libname"}.IO.Str;
 }
 

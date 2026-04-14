@@ -1,0 +1,239 @@
+# Build statically-linked tokenizers-ffi binaries for every supported
+# (OS, arch) pair and publish them as GitHub Release assets, so
+# `zef install Tokenizers` can download prebuilt libs instead of
+# running a ~5-minute cargo build from scratch.
+#
+# Triggers: manual dispatch while shaking down the recipe, and tag
+# push of `binaries-*` for production releases. The BINARY_TAG file
+# at repo root is the single source of truth for which tag this
+# release should produce.
+#
+# Cargo handles cross-compilation natively via `--target <triple>`,
+# so we don't need the 5-platform runner matrix that C projects do —
+# most targets can be built from a smaller set of host runners. But
+# for clarity and to keep toolchains consistent we use one runner
+# per target here (except macOS, which does both arches on arm64).
+
+name: build-binaries
+
+on:
+  workflow_dispatch:
+
+  push:
+    tags:
+      - 'binaries-*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build-${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS: one universal dylib (arm64+x86_64 slices) built on
+          # the arm64 runner. Cargo doesn't produce fat binaries
+          # directly; we build each slice separately and lipo-merge.
+          - os: macos-14
+            platform: macos-universal
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+            lib-ext: dylib
+
+          - os: ubuntu-22.04
+            platform: linux-x86_64-glibc
+            rust-targets: x86_64-unknown-linux-gnu
+            lib-ext: so
+
+          - os: ubuntu-22.04-arm
+            platform: linux-aarch64-glibc
+            rust-targets: aarch64-unknown-linux-gnu
+            lib-ext: so
+
+          - os: windows-2022
+            platform: windows-x86_64
+            rust-targets: x86_64-pc-windows-msvc
+            lib-ext: dll
+
+          - os: windows-11-arm
+            platform: windows-arm64
+            rust-targets: aarch64-pc-windows-msvc
+            lib-ext: dll
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Set up MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.platform == 'windows-arm64' && 'arm64' || 'amd64' }}
+
+      # Speed up repeat runs and cut tokenizers-0.21's ~5-min first
+      # build to cache warmth. Cache is keyed by platform + Cargo.lock
+      # so a lockfile bump invalidates cleanly.
+      - name: Cache cargo registry + target/
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            vendor/tokenizers-ffi/target
+          key: cargo-${{ matrix.platform }}-${{ hashFiles('vendor/tokenizers-ffi/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ matrix.platform }}-
+
+      # --- Build ---------------------------------------------------
+
+      # macOS: two cargo builds + lipo merge. Universal dylib is
+      # ~2x the per-slice size; acceptable vs separate-artefact
+      # complexity.
+      - name: Build universal macOS dylib
+        if: matrix.platform == 'macos-universal'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd vendor/tokenizers-ffi
+          cargo build --release --target aarch64-apple-darwin
+          cargo build --release --target x86_64-apple-darwin
+          lipo -create \
+            target/aarch64-apple-darwin/release/libtokenizers_ffi.dylib \
+            target/x86_64-apple-darwin/release/libtokenizers_ffi.dylib \
+            -output libtokenizers_ffi-universal.dylib
+          strip -x libtokenizers_ffi-universal.dylib
+          lipo -info libtokenizers_ffi-universal.dylib
+
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd vendor/tokenizers-ffi
+          cargo build --release --target ${{ matrix.rust-targets }}
+          strip --strip-unneeded \
+            target/${{ matrix.rust-targets }}/release/libtokenizers_ffi.so
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd vendor/tokenizers-ffi
+          cargo build --release --target ${{ matrix.rust-targets }}
+          # MSVC Release doesn't embed PDB; nothing to strip.
+
+      # --- Rename + stage artefact ---------------------------------
+
+      - name: Rename artefact to platform-specific filename
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p artefacts
+
+          case "${{ matrix.platform }}" in
+            macos-universal)
+              src="vendor/tokenizers-ffi/libtokenizers_ffi-universal.dylib"
+              ;;
+            *)
+              src="vendor/tokenizers-ffi/target/${{ matrix.rust-targets }}/release/libtokenizers_ffi.${{ matrix.lib-ext }}"
+              ;;
+          esac
+
+          dst="artefacts/libtokenizers_ffi-${{ matrix.platform }}.${{ matrix.lib-ext }}"
+          cp "$src" "$dst"
+
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            shasum -a 256 "$dst" > "$dst.sha256"
+          else
+            sha256sum "$dst" > "$dst.sha256"
+          fi
+          cat "$dst.sha256"
+
+      - name: Upload artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libtokenizers_ffi-${{ matrix.platform }}
+          path: artefacts/
+          retention-days: 14
+
+  release:
+    name: release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/binaries-') || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artefacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded/
+
+      - name: Flatten + generate combined checksums.txt + resolve tag
+        id: prep
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p release
+          find downloaded -type f \( -name 'libtokenizers_ffi-*.dylib' \
+                                 -o -name 'libtokenizers_ffi-*.so'    \
+                                 -o -name 'libtokenizers_ffi-*.dll'   \) \
+            -exec cp {} release/ \;
+
+          cd release
+          sha256sum * | sort > ../checksums.txt
+          cd ..
+          echo "--- checksums.txt ---"
+          cat checksums.txt
+
+          file_tag=$(cat BINARY_TAG | tr -d '[:space:]')
+          if [[ -z "$file_tag" ]]; then
+            echo "❌ BINARY_TAG file is empty or missing."
+            exit 1
+          fi
+
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            pushed=${GITHUB_REF#refs/tags/}
+            if [[ "$pushed" != "$file_tag" ]]; then
+              echo "❌ Pushed tag '$pushed' doesn't match BINARY_TAG file '$file_tag'."
+              exit 1
+            fi
+          fi
+
+          echo "tag=$file_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Create / update GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.prep.outputs.tag }}
+          name: ${{ steps.prep.outputs.tag }}
+          files: |
+            release/*
+            checksums.txt
+          body: |
+            Prebuilt tokenizers-ffi binaries for `${{ steps.prep.outputs.tag }}`.
+
+            These are what `zef install Tokenizers` downloads by default.
+            Rust-compiled cdylibs with statically-linked Rust dependencies;
+            macOS artefact is universal (arm64 + x86_64 slices in one dylib).
+
+            ## Verifying
+
+            ```
+            sha256sum -c checksums.txt
+            ```
+
+            ## After release
+
+            Copy `checksums.txt` contents into `resources/checksums.txt`
+            in the source tree + commit, then publish the next Raku
+            dist version.
+          draft: false
+          prerelease: false
