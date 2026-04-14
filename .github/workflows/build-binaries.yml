@@ -143,9 +143,16 @@ jobs:
           set -euxo pipefail
           mkdir -p artefacts
 
+          # Rust/MSVC cdylib output has no `lib` prefix on Windows
+          # (Windows DLL naming convention). Unix cdylibs do. We name
+          # our release artefacts with `lib` prefix uniformly for
+          # cross-platform consistency — rename on the way out.
           case "${{ matrix.platform }}" in
             macos-universal)
               src="vendor/tokenizers-ffi/libtokenizers_ffi-universal.dylib"
+              ;;
+            windows-*)
+              src="vendor/tokenizers-ffi/target/${{ matrix.rust-targets }}/release/tokenizers_ffi.${{ matrix.lib-ext }}"
               ;;
             *)
               src="vendor/tokenizers-ffi/target/${{ matrix.rust-targets }}/release/libtokenizers_ffi.${{ matrix.lib-ext }}"

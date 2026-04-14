@@ -197,48 +197,61 @@ class Build {
 
     # --- Source compile path --------------------------------------------
 
-    #| Delegate to the vendored Makefile. `make` invokes
-    #| `cargo build --release`; the Makefile picks the right file
-    #| extension per platform. Kept as a make invocation (rather than
-    #| inlining cargo here) so devs running `make` in libtokenizers-ffi
-    #| standalone get byte-identical behaviour.
+    #| Invoke cargo directly for the source-compile fallback. We
+    #| deliberately don't go through the vendored Makefile here:
+    #| Rust/MSVC cdylibs on Windows are named `tokenizers_ffi.dll`
+    #| without the `lib` prefix that Unix cdylibs get, and the
+    #| Makefile's $(DYLIB) variable hard-codes the prefixed name.
+    #| Calling cargo directly keeps the fallback behaviour
+    #| consistent across platforms and insulates us from Makefile
+    #| drift. Devs hacking on libtokenizers-ffi standalone still use
+    #| `make` for tests + sanitizers; that path isn't affected.
     method !compile-from-source($dist-path) {
         self!check-toolchain;
 
         my Str $vendor = "$dist-path/vendor/tokenizers-ffi";
-        my $rc = run 'make', '-C', $vendor;
-        die "❌ Failed to build tokenizers-ffi via make." unless $rc.exitcode == 0;
+        my $rc = run 'cargo', 'build', '--release',
+                     '--manifest-path', "$vendor/Cargo.toml";
+        die "❌ Failed to build tokenizers-ffi via cargo."
+            unless $rc.exitcode == 0;
 
         my Str $os = $*KERNEL.name.lc;
         my Str $ext = $os ~~ /darwin/ ?? 'dylib'
                    !! $*DISTRO.is-win ?? 'dll'
                    !! 'so';
 
+        # On Windows MSVC, cargo produces `tokenizers_ffi.dll`
+        # (no `lib` prefix — Windows DLL convention). Elsewhere the
+        # prefix is present. We ship with the prefix uniformly
+        # inside resources/lib/ because Tokenizers::Wrapper's FFI
+        # lookup expects that name on every platform.
+        my Str $src-name = $*DISTRO.is-win
+            ?? "tokenizers_ffi.$ext"
+            !! "libtokenizers_ffi.$ext";
+
         "$dist-path/resources/lib".IO.mkdir;
-        copy "$vendor/target/release/libtokenizers_ffi.$ext",
+        copy "$vendor/target/release/$src-name",
              "$dist-path/resources/lib/libtokenizers_ffi.$ext";
     }
 
     method !check-toolchain() {
-        # Need cargo + make. `run` with no shell keeps error output
-        # clean across platforms.
-        for <cargo make> -> Str $bin {
-            my $rc = run $bin, '--version', :out, :err;
-            $rc.out.slurp(:close);
-            $rc.err.slurp(:close);
-            unless $rc.exitcode == 0 {
-                die qq:to/ERR/;
-                    ❌ Required tool '$bin' not found in PATH.
-                    Install a Rust toolchain (cargo, rustc) and GNU make:
-                        macOS:         brew install rust make
-                        Debian/Ubuntu: sudo apt install cargo rustc make build-essential
-                        Fedora:        sudo dnf install cargo rust make gcc
-                        Arch:          sudo pacman -S rust make base-devel
-                        openSUSE:      sudo zypper in cargo rust make gcc
-                        Windows:       winget install Rustlang.Rustup + MSVC Build Tools
-                    Or use rustup: https://rustup.rs
-                    ERR
-            }
+        # Just cargo — we drive cargo directly rather than via make,
+        # so make isn't required for the fallback compile.
+        my $rc = run 'cargo', '--version', :out, :err;
+        $rc.out.slurp(:close);
+        $rc.err.slurp(:close);
+        unless $rc.exitcode == 0 {
+            die qq:to/ERR/;
+                ❌ cargo not found in PATH.
+                Install a Rust toolchain:
+                    macOS:         brew install rust
+                    Debian/Ubuntu: sudo apt install cargo rustc
+                    Fedora:        sudo dnf install cargo rust
+                    Arch:          sudo pacman -S rust
+                    openSUSE:      sudo zypper in cargo rust
+                    Windows:       winget install Rustlang.Rustup
+                Or use rustup: https://rustup.rs
+                ERR
         }
     }
 
