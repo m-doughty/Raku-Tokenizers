@@ -22,6 +22,13 @@
 #|   TOKENIZERS_CACHE_DIR=<path>      override cache directory
 #|                                    (default $XDG_CACHE_HOME / ~/.cache)
 #|
+#| Linux prebuilts are built on ubuntu-22.04 (glibc 2.35 — see the
+#| $MIN-GLIBC constant). On systems with older glibc (Ubuntu 20.04 /
+#| Debian 11 / RHEL 8 / etc.) the prebuilt loads but dies at first
+#| symbol use with "GLIBC_2.xx not found". Build detects this via
+#| `ldd --version` and short-circuits to the cargo source build
+#| before the download even happens.
+#|
 #| Binary artefacts are versioned independently of the Raku dist.
 #| See BINARY_TAG file at repo root — bumped when the vendored
 #| tokenizers-ffi version or build recipe changes.
@@ -32,6 +39,13 @@ class Build {
 
     constant $DEFAULT-BASE-URL =
         'https://github.com/m-doughty/Raku-Tokenizers/releases/download';
+
+    # Minimum glibc the prebuilt Linux archives are compatible with.
+    # The CI workflow builds on ubuntu-22.04 (glibc 2.35); the Rust
+    # cdylib references GLIBC_2.3x versioned symbols so loading on
+    # older systems fails at first symbol use with "GLIBC_2.xx not
+    # found". Bump in lockstep with the CI runner OS.
+    constant $MIN-GLIBC = v2.35;
 
     my %PLATFORM-SLUGS =
         'darwin-arm64'    => 'macos-universal',
@@ -60,6 +74,30 @@ class Build {
             self!stage-header($dist-path);
             self!stage-stubs($dist-path);
             return True;
+        }
+
+        # Guard: prebuilt Linux archives are built on ubuntu-22.04
+        # (glibc $MIN-GLIBC). On older glibc the downloaded .so loads
+        # but dies at first symbol use with "GLIBC_2.xx not found".
+        # Detect here and fall back to cargo source build before the
+        # download even happens.
+        if !$force-source && $plat.ends-with('-glibc') {
+            my Version $have = self!detect-glibc-version;
+            if $have.defined && $have cmp $MIN-GLIBC == Less {
+                if $binary-only {
+                    die "TOKENIZERS_BINARY_ONLY=1 set but system glibc "
+                      ~ "$have is older than prebuilt target $MIN-GLIBC "
+                      ~ "($plat / $binary-tag).";
+                }
+                note "⚠️  System glibc $have is older than prebuilt "
+                   ~ "target $MIN-GLIBC — falling back to source build "
+                   ~ "to avoid runtime loader errors (this can take ~5 min).";
+                self!compile-from-source($dist-path);
+                self!stage-header($dist-path);
+                self!stage-stubs($dist-path);
+                say "✅ Compiled Tokenizers from vendored source.";
+                return True;
+            }
         }
 
         unless $force-source {
@@ -260,6 +298,23 @@ class Build {
     method !detect-platform(--> Str) {
         my Str $key = "{$*KERNEL.name.lc}-{$*KERNEL.hardware.lc}";
         %PLATFORM-SLUGS{$key};
+    }
+
+    #| Parse `ldd --version` for the system's glibc version. Returns a
+    #| Version on glibc systems, undefined Version on musl (ldd --version
+    #| exits non-zero) or when ldd is absent / unparseable. Only
+    #| meaningful on Linux — don't call on other OSes.
+    method !detect-glibc-version(--> Version) {
+        my $proc = try { run 'ldd', '--version', :out, :err };
+        return Version without $proc;
+        my $out = $proc.out.slurp(:close);
+        $proc.err.slurp(:close);
+        return Version unless $proc.exitcode == 0;
+        my $first = $out.lines.head // '';
+        if $first ~~ / (\d+ '.' \d+ [ '.' \d+ ]?) \s* $ / {
+            return Version.new(~$0);
+        }
+        Version;
     }
 
     #| The C header is vendored in-tree and doesn't depend on platform.

@@ -2,6 +2,23 @@ Revision history for Tokenizers
 
 {{$NEXT}}
 
+0.2.1  2026-04-15T23:58:11+01:00
+    - Build.rakumod: detect system glibc via `ldd --version` and
+      fall back to cargo source compile when it's older than the
+      prebuilt target (currently v2.35, matching the ubuntu-22.04 CI
+      runner). Previously, users on Ubuntu 20.04 / Debian 11 / RHEL 8
+      downloaded a prebuilt .so that loaded but failed at first
+      symbol use with "GLIBC_2.xx not found". The guard fires before
+      the download so affected users just see a one-line note and a
+      ~5min cargo build instead of a broken install.
+      TOKENIZERS_BINARY_ONLY=1 now hard-fails with a clear message
+      on old-glibc systems rather than producing a broken install.
+    - New CI workflow .github/workflows/glibc-fallback.yml: runs
+      `zef install .` inside an ubuntu:20.04 container (glibc 2.31)
+      with rustup-installed toolchain and asserts both that the
+      fallback message appears in the build log and that the
+      source-compiled .so loads.
+
 0.2.0  2026-04-14T23:55:42+01:00
     - Prebuilt-binary-first install path. Build.rakumod now attempts
       to download a prebuilt .dylib / .so / .dll from the repo's

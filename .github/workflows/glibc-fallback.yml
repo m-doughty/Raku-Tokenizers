@@ -1,0 +1,88 @@
+name: glibc-fallback
+
+# Verifies that Build.rakumod correctly detects a system glibc older
+# than the prebuilt target ($MIN-GLIBC = 2.35, matching ubuntu-22.04)
+# and short-circuits to the cargo source-compile path instead of
+# downloading a prebuilt archive that would fail to load at runtime.
+#
+# GitHub dropped ubuntu-20.04 hosted runners in April 2025, so we use
+# a container on ubuntu-latest instead. The ubuntu:20.04 container
+# ships glibc 2.31 — comfortably below the 2.35 floor.
+
+on:
+  push:
+    branches:
+      - '*'
+    tags-ignore:
+      - '*'
+  pull_request:
+
+jobs:
+  ubuntu-20-04-fallback:
+    name: Ubuntu 20.04 (glibc 2.31) → cargo source fallback
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:20.04
+    # Containers default to /bin/sh (dash), which lacks `pipefail` and
+    # other bashisms the steps below rely on. Force bash workflow-wide.
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      NO_COLOR: '1'
+      # Keep cargo's output off-colour and non-interactive.
+      CARGO_TERM_COLOR: 'never'
+    steps:
+      - name: Install system deps
+        run: |
+          apt-get update
+          # Focal has no `zef` package and its `rakudo` is years out of
+          # date, so we let Raku/setup-raku handle that. The source-
+          # compile path needs cargo + a C toolchain for the
+          # tokenizers-ffi build.rs shims. Focal's rustc (1.47) is
+          # too old for modern tokenizers; install via rustup.
+          apt-get install -y --no-install-recommends \
+              build-essential curl ca-certificates git pkg-config
+          # Don't pipe to `head` — pipefail propagates SIGPIPE.
+          ldd --version
+
+      - name: Install Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+              | sh -s -- -y --default-toolchain stable --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - uses: actions/checkout@v4
+
+      - uses: Raku/setup-raku@v1
+        with:
+          raku-version: 'latest'
+
+      - name: Install module (capture build log)
+        run: |
+          set -eo pipefail
+          # `zef install .` runs Build.rakumod; we tee its output so the
+          # subsequent grep can assert the fallback path was taken.
+          # Source build is ~5 min so bump zef's fetch-timeout generously.
+          zef install --/test --verbose . 2>&1 | tee build.log
+
+      - name: Assert fallback message appeared
+        run: |
+          if ! grep -F 'falling back to source build to avoid runtime loader errors' build.log; then
+              echo "❌ Expected glibc-fallback message not found in build log."
+              echo "---- build.log tail ----"
+              tail -100 build.log
+              exit 1
+          fi
+          echo "✅ Build.rakumod correctly fell back to source compile on old glibc."
+
+      - name: Smoke-test the installed module
+        run: |
+          set -eo pipefail
+          # If the cargo source-build produced a working libtokenizers_ffi.so,
+          # loading the module + constructing an empty tokenizer handle
+          # should succeed. We don't exercise encode/decode since that
+          # needs a real tokenizer JSON; just prove the .so loads.
+          raku -e 'use Tokenizers; say "ok"' | tee smoke.out
+          grep -qx ok smoke.out
