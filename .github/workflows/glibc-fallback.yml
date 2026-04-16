@@ -77,12 +77,12 @@ jobs:
           fi
           echo "✅ Build.rakumod correctly fell back to source compile on old glibc."
 
-      - name: Smoke-test the installed module
-        run: |
-          set -eo pipefail
-          # If the cargo source-build produced a working libtokenizers_ffi.so,
-          # loading the module + constructing an empty tokenizer handle
-          # should succeed. We don't exercise encode/decode since that
-          # needs a real tokenizer JSON; just prove the .so loads.
-          raku -e 'use Tokenizers; say "ok"' | tee smoke.out
-          grep -qx ok smoke.out
+      - name: Install App::Prove6
+        run: zef install --/test App::Prove6
+
+      - name: Run unit tests
+        # Same invocation as test.yml — exercises the full suite
+        # against the cargo source-compiled libtokenizers_ffi.so, so
+        # the fallback path is validated end-to-end (encode / decode /
+        # special-token handling) rather than just at load.
+        run: prove6 --verbose -I lib t

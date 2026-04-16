@@ -36,32 +36,37 @@ jobs:
         with:
           raku-version: ${{ matrix.raku-version }}
 
-      # Rust toolchain is only needed as a belt-and-braces fallback
-      # in case Build.rakumod's prebuilt download fails for some
-      # reason. Without it, a download failure would propagate all
-      # the way through as an install error; with it, the fallback
-      # compile path has a working cargo.
-      - name: Install Rust toolchain (fallback compile path)
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Set up MSVC (Windows fallback)
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
-
-      # Full install (no --deps-only) so Build.rakumod actually
-      # runs — this is exactly the `zef install Tokenizers` flow
-      # that end users hit. If the prebuilt download or SHA verify
-      # is broken, install fails here and the test job turns red
-      # before we even get to the test runner.
-      - name: Install Tokenizers (runs Build.rakumod)
+      # ---------------------------------------------------------
+      # Prebuilt path — no Rust toolchain installed yet. Proves the
+      # prebuilt download + SHA verify + staging works without any
+      # system deps beyond Raku itself. This is exactly the
+      # `zef install Tokenizers` flow that end users hit.
+      # ---------------------------------------------------------
+      - name: Install Tokenizers via prebuilt path
         run: zef install --/test --test-depends .
 
       - name: Install App::Prove6
         run: zef install --/test App::Prove6
 
-      # No `-I.` — tests run against the installed module so
-      # %?RESOURCES resolves to the dylib that Build.rakumod just
-      # staged into the install location. Fixtures at t/fixtures/
-      # still work because prove6's CWD is the repo root.
-      - name: Run tests
+      - name: Run tests — prebuilt path
+        run: prove6 --verbose t
+
+      # ---------------------------------------------------------
+      # Source-build fallback — install Rust + MSVC, then force a
+      # cargo build to cover the path users without a supported
+      # prebuilt platform end up on.
+      # ---------------------------------------------------------
+      - name: Install Rust toolchain (source-build fallback)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up MSVC (Windows source-build)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Tokenizers via source-build path
+        env:
+          TOKENIZERS_BUILD_FROM_SOURCE: '1'
+        run: zef install --/test --test-depends --force-install .
+
+      - name: Run tests — source-build path
         run: prove6 --verbose t
