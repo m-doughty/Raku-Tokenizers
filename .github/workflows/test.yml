@@ -28,7 +28,7 @@ jobs:
           - 'latest'
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -61,7 +61,7 @@ jobs:
 
       - name: Set up MSVC (Windows source-build)
         if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: m-doughty/msvc-dev-cmd@v1-node24
 
       - name: Install Tokenizers via source-build path
         env:

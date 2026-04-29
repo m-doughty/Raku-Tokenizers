@@ -63,7 +63,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -72,7 +72,7 @@ jobs:
 
       - name: Set up MSVC (Windows)
         if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: m-doughty/msvc-dev-cmd@v1-node24
         with:
           arch: ${{ matrix.platform == 'windows-arm64' && 'arm64' || 'amd64' }}
 
@@ -80,7 +80,7 @@ jobs:
       # build to cache warmth. Cache is keyed by platform + Cargo.lock
       # so a lockfile bump invalidates cleanly.
       - name: Cache cargo registry + target/
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -122,7 +122,7 @@ jobs:
 
       # PowerShell on Windows — NOT bash. Git Bash prepends its own
       # /usr/bin to PATH, ahead of the MSVC tooling that
-      # ilammy/msvc-dev-cmd set up. rustc then resolves `link.exe`
+      # m-doughty/msvc-dev-cmd set up. rustc then resolves `link.exe`
       # to Git's POSIX `link` utility instead of MSVC's linker and
       # fails with "/usr/bin/link: extra operand …". pwsh inherits
       # the vcvars-set PATH correctly.
@@ -170,7 +170,7 @@ jobs:
           cat "$dst.sha256"
 
       - name: Upload artefact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: libtokenizers_ffi-${{ matrix.platform }}
           path: artefacts/
@@ -182,10 +182,10 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/binaries-') || github.event_name == 'workflow_dispatch'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download all artefacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: downloaded/
 
@@ -223,7 +223,7 @@ jobs:
           echo "tag=$file_tag" >> "$GITHUB_OUTPUT"
 
       - name: Create / update GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.prep.outputs.tag }}
           name: ${{ steps.prep.outputs.tag }}

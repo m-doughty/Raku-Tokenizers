@@ -2,6 +2,9 @@ Revision history for Tokenizers
 
 {{$NEXT}}
 
+0.2.2  2026-04-30T00:16:12+01:00
+    - Bump Github actions to use node 24+
+
 0.2.1  2026-04-15T23:58:11+01:00
     - Build.rakumod: detect system glibc via `ldd --version` and
       fall back to cargo source compile when it's older than the

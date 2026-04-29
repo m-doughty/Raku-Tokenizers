@@ -53,7 +53,7 @@ jobs:
               | sh -s -- -y --default-toolchain stable --profile minimal
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: Raku/setup-raku@v1
         with:
