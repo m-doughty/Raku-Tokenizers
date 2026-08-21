@@ -30,7 +30,7 @@ my @prompt-ids = $kimi.encode($rendered-prompt, :allow-special-tokens);
 DESCRIPTION
 ===========
 
-`Tokenizers` is a thin Raku wrapper around the HuggingFace `tokenizers` and `tiktoken-rs` Rust crates, exposed via a small FFI shim (`libtokenizers_ffi`). You can load any HuggingFace `tokenizer.json`, or a raw rank-based `tiktoken.model` plus its regex and special-token mapping, and encode/decode text or get token counts without a Python stack.
+`Tokenizers` is a thin Raku wrapper around the HuggingFace `tokenizers` and `tiktoken-rs` Rust crates, exposed via a small FFI shim (`libtokenizers_ffi`). You can load any `tokenizer.json` produced by HuggingFace tooling, or a raw rank-based `tiktoken.model` plus its regex and special-token mapping, and encode/decode text or get token counts without a Python stack.
 
 Designed to be dropped into monorepos that do synthetic roleplay data generation, local-LLM token counting, or any pipeline where you already have a `tokenizer.json` file and just want fast, lightweight tokenisation from Raku.
 
@@ -95,32 +95,32 @@ API
 `Tokenizers.new-from-json($json)`
 ---------------------------------
 
-Builds a tokenizer from a HuggingFace `tokenizer.json` string or Blob. Returns a `Tokenizers` instance. Throws `X::Tokenizers::Create` if the JSON is malformed or references an unknown tokenizer type.
+Builds a tokenizer from a HuggingFace `tokenizer.json` string. Returns a `Tokenizers` instance. Throws if the JSON is malformed or references an unknown tokenizer type. Accepts a `Str` or `Blob`.
 
 `Tokenizers.new-from-tiktoken($model, :$pattern!, :%special-tokens!)`
-----------------------------------------------------------------------------
+---------------------------------------------------------------------
 
-Builds a tokenizer from the raw text or bytes of a `tiktoken.model` rank file. `pattern` is the exact model regex; `special-tokens` maps each complete special-token string to its uint32 ID. Base64, ranks, byte coverage, regex, and ID collisions are validated.
+Builds a tokenizer from the raw text or bytes of a `tiktoken.model` rank file. `$pattern` is the exact regex associated with the model. `%special-tokens` maps each complete special-token string to its unsigned 32-bit token ID. The constructor validates base64, ranks, the required byte vocabulary, regex, and ID collisions.
 
 `.encode($text, :$add-special-tokens = True, :$allow-special-tokens = False --` List)>
----------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------
 
-Tokenises `$text` and returns a List of token IDs (`UInt`). With `:!add-special-tokens` a JSON backend returns only content tokens. Tiktoken never inserts BOS/EOS, regardless of that option. Recognized tiktoken special-token strings are ordinary text unless `:allow-special-tokens` is passed; rendered chat templates normally need that opt-in.
+Tokenises `$text` and returns a List of token IDs (`UInt`). With `:!add-special-tokens` you get just the content tokens — useful for concatenating into larger sequences. For tiktoken, `:add-special-tokens` is accepted for uniform calling code but never inserts BOS or EOS. Recognized tiktoken special-token strings are encoded as ordinary text unless `:allow-special-tokens` is passed; rendered chat templates normally need that explicit opt-in.
 
 `.decode(@ids, :$skip-special-tokens = False --` Str)>
 ------------------------------------------------------
 
-Reconstructs a string from a List of token IDs. With `:skip-special-tokens` drops backend-recognized special tokens from the output.
+Reconstructs a string from a List of token IDs. With `:skip-special-tokens` drops backend-recognized special tokens.
 
 `.count(Str $text, :$add-special-tokens = True, :$allow-special-tokens = False --` Int)>
------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------
 
 Shortcut for `.encode` with the same special-token policy.
 
 Errors
 ------
 
-Construction, encoding, and decoding failures throw `X::Tokenizers::Create`, `X::Tokenizers::Encode`, and `X::Tokenizers::Decode`. Messages contain the native validation or tokenizer error; malformed native inputs do not panic across FFI.
+Construction, encoding, and decoding failures throw `X::Tokenizers::Create`, `X::Tokenizers::Encode`, and `X::Tokenizers::Decode`. Their messages include the native validation or tokenizer error; malformed native inputs no longer panic across FFI.
 
 Resource management
 -------------------
@@ -140,3 +140,4 @@ Copyright 2026 Matt Doughty
 This library is free software; you can redistribute it and/or modify it under the Artistic License 2.0.
 
 The vendored `libtokenizers-ffi` crate is licensed under Artistic License 2.0. HuggingFace `tokenizers` is Apache-2.0 and `tiktoken-rs` is MIT licensed.
+

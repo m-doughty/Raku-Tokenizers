@@ -2,6 +2,19 @@ Revision history for Tokenizers
 
 {{$NEXT}}
 
+0.3.0  2026-08-21T21:15:14+01:00
+	- Add `new-from-tiktoken` for raw `tiktoken.model` text or bytes,
+	  caller-supplied split regexes, and explicit special-token maps.
+	- Add opt-in `:allow-special-tokens` to encode/count. Tiktoken never
+	  inserts BOS/EOS; `:add-special-tokens` remains JSON-backend behavior.
+	- Decode tiktoken IDs through the same object, including optional
+	  special-token skipping.
+	- Replace Rust panics/unwraps at the C boundary with status/null returns,
+	  thread-local error details, typed Raku exceptions, checked inputs, and
+	  matching allocation/free routines.
+	- Add malformed-input, Unicode/CJK/emoji/code, special-token policy, and
+	  concurrent-use coverage. Pin the native dependency graph in Cargo.lock.
+
 0.2.2  2026-04-30T00:16:12+01:00
     - Bump Github actions to use node 24+
 
