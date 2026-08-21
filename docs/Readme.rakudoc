@@ -2,8 +2,8 @@
 
 =head1 NAME
 
-Tokenizers - Raku bindings for HuggingFace Tokenizers via a
-native Rust cdylib
+Tokenizers - Raku bindings for HuggingFace Tokenizers and tiktoken
+via a native Rust cdylib
 
 =head1 SYNOPSIS
 
@@ -16,16 +16,24 @@ my $tok  = Tokenizers.new-from-json($json);
 my @ids = $tok.encode('Hello, world!');   # (9906, 11, 1917, 0)
 say $tok.decode(@ids);                    # Hello, world!
 say $tok.count('Hello, world!');          # 4
+
+my $model = slurp 'tiktoken.model';
+my $kimi = Tokenizers.new-from-tiktoken(
+    $model,
+    pattern => $model-regex,
+    special-tokens => %special-token-ids,
+);
+my @prompt-ids = $kimi.encode($rendered-prompt, :allow-special-tokens);
 =end code
 
 =head1 DESCRIPTION
 
 C<Tokenizers> is a thin Raku wrapper around the HuggingFace
-C<tokenizers> Rust crate, exposed via a small FFI shim
-(C<libtokenizers_ffi>). You can load any C<tokenizer.json> produced
-by HuggingFace tooling — BPE, WordPiece, Unigram, SentencePiece,
-etc. — and encode/decode text or get token counts without running
-a Python transformer stack.
+C<tokenizers> and C<tiktoken-rs> Rust crates, exposed via a small FFI
+shim (C<libtokenizers_ffi>). You can load any C<tokenizer.json>
+produced by HuggingFace tooling, or a raw rank-based
+C<tiktoken.model> plus its regex and special-token mapping, and
+encode/decode text or get token counts without a Python stack.
 
 Designed to be dropped into monorepos that do synthetic roleplay
 data generation, local-LLM token counting, or any pipeline where
@@ -97,7 +105,7 @@ Prebuilt binaries are tagged independently of the Raku distribution:
 
     binaries-tokenizers-<upstream-version>-r<recipe-revision>
 
-e.g. C<binaries-tokenizers-0.1.0-r1>. The C<upstream-version>
+e.g. C<binaries-tokenizers-0.2.0-r1>. The C<upstream-version>
 tracks the vendored C<libtokenizers-ffi> crate version;
 C<recipe-revision> bumps only when build flags change (target
 triples, strip options, platform additions) while the upstream
@@ -114,22 +122,41 @@ same binary tag get their download from the cache, not the network.
 
 Builds a tokenizer from a HuggingFace C<tokenizer.json> string.
 Returns a C<Tokenizers> instance. Throws if the JSON is malformed
-or references an unknown tokenizer type.
+or references an unknown tokenizer type. Accepts a C<Str> or C<Blob>.
 
-=head2 C<.encode($text, :$add-special-tokens = True --> List)>
+=head2 C<Tokenizers.new-from-tiktoken($model, :$pattern!, :%special-tokens!)>
+
+Builds a tokenizer from the raw text or bytes of a C<tiktoken.model>
+rank file. C<$pattern> is the exact regex associated with the model.
+C<%special-tokens> maps each complete special-token string to its
+unsigned 32-bit token ID. The constructor validates base64, ranks,
+the required byte vocabulary, regex, and ID collisions.
+
+=head2 C<.encode($text, :$add-special-tokens = True, :$allow-special-tokens = False --> List)>
 
 Tokenises C<$text> and returns a List of token IDs (C<UInt>).
 With C<:!add-special-tokens> you get just the content tokens —
-useful for concatenating into larger sequences.
+useful for concatenating into larger sequences. For tiktoken,
+C<:add-special-tokens> is accepted for uniform calling code but never
+inserts BOS or EOS. Recognized tiktoken special-token strings are
+encoded as ordinary text unless C<:allow-special-tokens> is passed;
+rendered chat templates normally need that explicit opt-in.
 
 =head2 C<.decode(@ids, :$skip-special-tokens = False --> Str)>
 
 Reconstructs a string from a List of token IDs. With
-C<:skip-special-tokens> drops BOS/EOS/PAD tokens from the output.
+C<:skip-special-tokens> drops backend-recognized special tokens.
 
-=head2 C<.count(Str $text, :$add-special-tokens = True --> Int)>
+=head2 C<.count(Str $text, :$add-special-tokens = True, :$allow-special-tokens = False --> Int)>
 
-Shortcut for C<.encode($text, :$add-special-tokens).elems>.
+Shortcut for C<.encode> with the same special-token policy.
+
+=head2 Errors
+
+Construction, encoding, and decoding failures throw
+C<X::Tokenizers::Create>, C<X::Tokenizers::Encode>, and
+C<X::Tokenizers::Decode>. Their messages include the native validation
+or tokenizer error; malformed native inputs no longer panic across FFI.
 
 =head2 Resource management
 
@@ -150,7 +177,7 @@ This library is free software; you can redistribute it and/or modify
 it under the Artistic License 2.0.
 
 The vendored C<libtokenizers-ffi> crate is licensed under Artistic
-License 2.0. The HuggingFace C<tokenizers> crate it wraps is
-Apache-2.0.
+License 2.0. HuggingFace C<tokenizers> is Apache-2.0 and
+C<tiktoken-rs> is MIT licensed.
 
 =end pod

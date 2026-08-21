@@ -8,44 +8,45 @@
 extern "C" {
 #endif
 
-// Handle to the tokenizer object
 typedef void *TokenizerHandle;
 
-// Create a tokenizer from serialized JSON config
+/* Constructors return NULL on failure. Retrieve details with
+ * tokenizers_get_last_error on the same thread. */
 TokenizerHandle tokenizers_new_from_str(const char *json, size_t len);
 
-// Encode text into token IDs
-void tokenizers_encode(TokenizerHandle handle, const char *text, size_t len,
-                       int add_special_tokens, uint32_t **out_ids,
-                       size_t *out_len);
+TokenizerHandle tokenizers_new_from_tiktoken(
+    const uint8_t *model, size_t model_len, const uint8_t *pattern,
+    size_t pattern_len, const uint8_t *const *special_token_ptrs,
+    const size_t *special_token_lens, const uint32_t *special_token_ids,
+    size_t special_token_count);
 
-// Decode token IDs and store internally
-void tokenizers_decode(TokenizerHandle handle, const uint32_t *ids, size_t len,
-                       int skip_special_tokens);
+/* Operations return 0 on success and -1 on failure. No output allocation is
+ * retained on failure. add_special_tokens applies only to tokenizer.json
+ * backends; allow_special_tokens applies only to tiktoken backends. */
+int tokenizers_encode(TokenizerHandle handle, const char *text, size_t len,
+                      int add_special_tokens, int allow_special_tokens,
+                      uint32_t **out_ids, size_t *out_len);
 
-// Retrieve decoded string from internal buffer (must free with
-// tokenizers_free_cstring)
-void tokenizers_get_decode_str(TokenizerHandle handle, char **out_ptr,
-                               size_t *out_len);
+int tokenizers_decode(TokenizerHandle handle, const uint32_t *ids, size_t len,
+                      int skip_special_tokens);
 
-// Decode token IDs and return string directly (must free with
-// tokenizers_free_cstring)
-void tokenizers_decode_and_get(TokenizerHandle handle, const uint32_t *ids,
-                               size_t len, int skip_special_tokens,
-                               const char **out_ptr, size_t *out_len);
+int tokenizers_get_decode_str(TokenizerHandle handle, uint8_t **out_ptr,
+                              size_t *out_len);
 
-// Free a tokenizer instance
+int tokenizers_decode_and_get(TokenizerHandle handle, const uint32_t *ids,
+                              size_t len, int skip_special_tokens,
+                              uint8_t **out_ptr, size_t *out_len);
+
+/* Returns a newly allocated UTF-8 copy of the calling thread's last error.
+ * Free it with tokenizers_free_cstring. */
+int tokenizers_get_last_error(uint8_t **out_ptr, size_t *out_len);
+
 void tokenizers_free(TokenizerHandle handle);
-
-// Free string returned by tokenizers_get_decode_str or
-// tokenizers_decode_and_get
 void tokenizers_free_cstring(char *ptr);
-
-// Free array of token IDs returned by tokenizers_encode
 void tokenizers_free_ids(uint32_t *ptr, size_t len);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // TOKENIZERS_FFI_H
+#endif /* TOKENIZERS_FFI_H */

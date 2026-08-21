@@ -1,0 +1,101 @@
+use Test;
+use lib "lib";
+use Tokenizers;
+
+sub byte-model(--> Str) {
+	my $alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	(0..255).map(-> $byte {
+		my $first = $alphabet.substr($byte +> 2, 1);
+		my $second = $alphabet.substr(($byte +& 3) +< 4, 1);
+		"$first$second== $byte";
+	}).join("\n");
+}
+
+my $pattern = "(?s).";
+my %special-tokens =
+	"<|im_start|>" => 300,
+	"<|im_end|>" => 301,
+	"<|tool_calls_section_begin|>" => 302;
+my $tokenizer = Tokenizers.new-from-tiktoken(
+	byte-model,
+	:$pattern,
+	:%special-tokens,
+);
+isa-ok $tokenizer, Tokenizers, "constructs from raw tiktoken.model text";
+
+my $prompt = q:to/PROMPT/;
+<|im_start|>assistant
+你好，世界 👩🏽‍💻
+```raku
+say "hello";
+```
+<|tool_calls_section_begin|>{"name":"search"}<|im_end|>
+PROMPT
+
+my @ordinary = $tokenizer.encode($prompt, :!add-special-tokens);
+nok @ordinary.any == 300, "special token is ordinary text by default";
+nok @ordinary.any == 301, "end token is ordinary text by default";
+is $tokenizer.decode(@ordinary), $prompt,
+	"CJK, emoji, code, and special-looking ordinary text round trip";
+
+my @allowed = $tokenizer.encode(
+	$prompt,
+	:!add-special-tokens,
+	:allow-special-tokens,
+);
+is @allowed.grep(300).elems, 1, "recognized start token can be allowed";
+is @allowed.grep(301).elems, 1, "recognized end token can be allowed";
+is @allowed.grep(302).elems, 1, "recognized tool token can be allowed";
+is $tokenizer.decode(@allowed), $prompt, "allowed special tokens round trip";
+unlike $tokenizer.decode(@allowed, :skip-special-tokens), / "<|" /,
+	"decode can omit tiktoken special tokens";
+is $tokenizer.count($prompt, :!add-special-tokens, :allow-special-tokens),
+	@allowed.elems,
+	"count shares special-token policy with encode";
+
+is-deeply $tokenizer.encode("plain", :add-special-tokens),
+	$tokenizer.encode("plain", :!add-special-tokens),
+	"tiktoken never inserts BOS or EOS";
+is $tokenizer.decode([]), "", "empty token list decodes to empty text";
+
+my Blob $model-bytes = byte-model.encode("utf8");
+isa-ok Tokenizers.new-from-tiktoken(
+	$model-bytes,
+	:$pattern,
+	:%special-tokens,
+), Tokenizers, "constructor accepts raw model bytes";
+
+throws-like {
+	Tokenizers.new-from-tiktoken("not-base64 0", :$pattern, :%special-tokens)
+}, X::Tokenizers::Create, "malformed base64 model throws typed error",
+	message => / "invalid base64" /;
+
+throws-like {
+	Tokenizers.new-from-tiktoken("YQ== 0", :$pattern, :%special-tokens)
+}, X::Tokenizers::Create, "incomplete byte vocabulary throws typed error",
+	message => / "required single-byte token" /;
+
+throws-like {
+	Tokenizers.new-from-tiktoken(byte-model, pattern => "(", :%special-tokens)
+}, X::Tokenizers::Create, "invalid split regex throws typed error",
+	message => / "could not create tiktoken tokenizer" /;
+
+throws-like {
+	Tokenizers.new-from-tiktoken(
+		byte-model,
+		:$pattern,
+		special-tokens => { "<|bad|>" => 1 },
+	)
+}, X::Tokenizers::Create, "special IDs cannot collide with ordinary IDs",
+	message => / "reuses ordinary token ID" /;
+
+my @jobs = (1..12).map(-> $index {
+	start {
+		my $text = "并发 $index 🦀 <|im_start|>";
+		my @ids = $tokenizer.encode($text, :allow-special-tokens);
+		$tokenizer.decode(@ids) eq $text && @ids.grep(300).elems == 1;
+	}
+});
+ok await(@jobs).all, "one tiktoken object supports concurrent encode/decode";
+
+done-testing;

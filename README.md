@@ -3,7 +3,7 @@
 NAME
 ====
 
-Tokenizers - Raku bindings for HuggingFace Tokenizers via a native Rust cdylib
+Tokenizers - Raku bindings for HuggingFace Tokenizers and tiktoken via a native Rust cdylib
 
 SYNOPSIS
 ========
@@ -17,12 +17,20 @@ my $tok  = Tokenizers.new-from-json($json);
 my @ids = $tok.encode('Hello, world!');   # (9906, 11, 1917, 0)
 say $tok.decode(@ids);                    # Hello, world!
 say $tok.count('Hello, world!');          # 4
+
+my $model = slurp 'tiktoken.model';
+my $kimi = Tokenizers.new-from-tiktoken(
+    $model,
+    pattern => $model-regex,
+    special-tokens => %special-token-ids,
+);
+my @prompt-ids = $kimi.encode($rendered-prompt, :allow-special-tokens);
 ```
 
 DESCRIPTION
 ===========
 
-`Tokenizers` is a thin Raku wrapper around the HuggingFace `tokenizers` Rust crate, exposed via a small FFI shim (`libtokenizers_ffi`). You can load any `tokenizer.json` produced by HuggingFace tooling — BPE, WordPiece, Unigram, SentencePiece, etc. — and encode/decode text or get token counts without running a Python transformer stack.
+`Tokenizers` is a thin Raku wrapper around the HuggingFace `tokenizers` and `tiktoken-rs` Rust crates, exposed via a small FFI shim (`libtokenizers_ffi`). You can load any HuggingFace `tokenizer.json`, or a raw rank-based `tiktoken.model` plus its regex and special-token mapping, and encode/decode text or get token counts without a Python stack.
 
 Designed to be dropped into monorepos that do synthetic roleplay data generation, local-LLM token counting, or any pipeline where you already have a `tokenizer.json` file and just want fast, lightweight tokenisation from Raku.
 
@@ -77,7 +85,7 @@ Prebuilt binaries are tagged independently of the Raku distribution:
 
     binaries-tokenizers-<upstream-version>-r<recipe-revision>
 
-e.g. `binaries-tokenizers-0.1.0-r1`. The `upstream-version` tracks the vendored `libtokenizers-ffi` crate version; `recipe-revision` bumps only when build flags change (target triples, strip options, platform additions) while the upstream library stays the same.
+e.g. `binaries-tokenizers-0.2.0-r1`. The `upstream-version` tracks the vendored `libtokenizers-ffi` crate version; `recipe-revision` bumps only when build flags change (target triples, strip options, platform additions) while the upstream library stays the same.
 
 `Build.rakumod` reads the pinned binary tag from the top-level `BINARY_TAG` file so a Raku-side bugfix release of `Tokenizers` can ship without rebuilding binaries — users upgrading within the same binary tag get their download from the cache, not the network.
 
@@ -87,22 +95,32 @@ API
 `Tokenizers.new-from-json($json)`
 ---------------------------------
 
-Builds a tokenizer from a HuggingFace `tokenizer.json` string. Returns a `Tokenizers` instance. Throws if the JSON is malformed or references an unknown tokenizer type.
+Builds a tokenizer from a HuggingFace `tokenizer.json` string or Blob. Returns a `Tokenizers` instance. Throws `X::Tokenizers::Create` if the JSON is malformed or references an unknown tokenizer type.
 
-`.encode($text, :$add-special-tokens = True --` List)>
-------------------------------------------------------
+`Tokenizers.new-from-tiktoken($model, :$pattern!, :%special-tokens!)`
+----------------------------------------------------------------------------
 
-Tokenises `$text` and returns a List of token IDs (`UInt`). With `:!add-special-tokens` you get just the content tokens — useful for concatenating into larger sequences.
+Builds a tokenizer from the raw text or bytes of a `tiktoken.model` rank file. `pattern` is the exact model regex; `special-tokens` maps each complete special-token string to its uint32 ID. Base64, ranks, byte coverage, regex, and ID collisions are validated.
+
+`.encode($text, :$add-special-tokens = True, :$allow-special-tokens = False --` List)>
+---------------------------------------------------------------------------------------
+
+Tokenises `$text` and returns a List of token IDs (`UInt`). With `:!add-special-tokens` a JSON backend returns only content tokens. Tiktoken never inserts BOS/EOS, regardless of that option. Recognized tiktoken special-token strings are ordinary text unless `:allow-special-tokens` is passed; rendered chat templates normally need that opt-in.
 
 `.decode(@ids, :$skip-special-tokens = False --` Str)>
 ------------------------------------------------------
 
-Reconstructs a string from a List of token IDs. With `:skip-special-tokens` drops BOS/EOS/PAD tokens from the output.
+Reconstructs a string from a List of token IDs. With `:skip-special-tokens` drops backend-recognized special tokens from the output.
 
-`.count(Str $text, :$add-special-tokens = True --` Int)>
---------------------------------------------------------
+`.count(Str $text, :$add-special-tokens = True, :$allow-special-tokens = False --` Int)>
+-----------------------------------------------------------------------------------------
 
-Shortcut for `.encode($text, :$add-special-tokens).elems`.
+Shortcut for `.encode` with the same special-token policy.
+
+Errors
+------
+
+Construction, encoding, and decoding failures throw `X::Tokenizers::Create`, `X::Tokenizers::Encode`, and `X::Tokenizers::Decode`. Messages contain the native validation or tokenizer error; malformed native inputs do not panic across FFI.
 
 Resource management
 -------------------
@@ -121,5 +139,4 @@ Copyright 2026 Matt Doughty
 
 This library is free software; you can redistribute it and/or modify it under the Artistic License 2.0.
 
-The vendored `libtokenizers-ffi` crate is licensed under Artistic License 2.0. The HuggingFace `tokenizers` crate it wraps is Apache-2.0.
-
+The vendored `libtokenizers-ffi` crate is licensed under Artistic License 2.0. HuggingFace `tokenizers` is Apache-2.0 and `tiktoken-rs` is MIT licensed.

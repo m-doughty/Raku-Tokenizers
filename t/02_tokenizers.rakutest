@@ -2,7 +2,7 @@ use Test;
 use lib 'lib';
 use Tokenizers;
 
-plan 10;
+plan 14;
 
 my $json-path = "t/fixtures/tokenizer.json";
 ok $json-path.IO.e, "Tokenizer fixture exists";
@@ -28,5 +28,22 @@ isa-ok $decoded2, Str, "Decoded output is a string";
 is $decoded, "Hello, world!", "Decoded string includes original text (no special tokens)";
 is $decoded2, "<s>Hello, world!", "Decoded string includes original text"; 
 
-done-testing;
+my @compatible = $tokenizer.encode(
+	$text,
+	:!add-special-tokens,
+	:allow-special-tokens,
+);
+is-deeply @compatible, @tokens,
+	"allow-special-tokens is harmless for JSON tokenizers";
 
+throws-like { Tokenizers.new-from-json(q[{]) }, X::Tokenizers::Create,
+	"malformed JSON throws a typed construction error",
+	message => / "could not parse tokenizer JSON" /;
+
+throws-like { $tokenizer.decode([-1]) }, X::Tokenizers::Decode,
+	"negative token ID throws a typed decode error";
+
+throws-like { $tokenizer.decode([0x1_0000_0000]) }, X::Tokenizers::Decode,
+	"token IDs larger than uint32 throw a typed decode error";
+
+done-testing;

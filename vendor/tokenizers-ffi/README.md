@@ -1,14 +1,15 @@
 # `libtokenizers_ffi`
 
-**C FFI wrapper around HuggingFace's `tokenizers` Rust crate.**
+**C FFI wrapper around HuggingFace's `tokenizers` and `tiktoken-rs`.**
 Provides safe and ergonomic bindings for encoding and decoding text using pretrained tokenizers from Huggingface, usable from C or any language that supports C ABI.
 
 ## 🔧 Features
 
 * Load a tokenizer from serialized JSON (`tokenizer.json`)
+* Load a raw rank-based `tiktoken.model` with a custom regex and special tokens
 * Encode text to token IDs
 * Decode token IDs back to text
-* Retrieve decoded string buffers safely
+* Nullable/status returns and thread-local error details across the C ABI
 * Idiomatic C API with memory-safe allocation/deallocation helpers
 
 ## 📦 Requirements
@@ -59,26 +60,36 @@ Load a tokenizer and encode/decode text:
 
 ```c
 TokenizerHandle handle = tokenizers_new_from_str(json_data, json_len);
+if (handle == NULL) {
+    uint8_t *message = NULL;
+    size_t message_len = 0;
+    tokenizers_get_last_error(&message, &message_len);
+    /* inspect message, then free it */
+    tokenizers_free_cstring((char *)message);
+}
 
 // Encode text to tokens
 uint32_t* ids = NULL;
 size_t id_len = 0;
-tokenizers_encode(handle, "Hello, world!", 13, 1, &ids, &id_len);
+if (tokenizers_encode(handle, "Hello, world!", 13, 1, 0,
+                      &ids, &id_len) != 0) {
+    /* retrieve tokenizers_get_last_error() */
+}
 
 // Decode via 2-step flow
 tokenizers_decode(handle, ids, id_len, 1);
-char* decoded = NULL;
+uint8_t* decoded = NULL;
 size_t decoded_len = 0;
 tokenizers_get_decode_str(handle, &decoded, &decoded_len);
 
 // Or decode in one step
-const char* decoded2 = NULL;
+uint8_t* decoded2 = NULL;
 size_t len2 = 0;
 tokenizers_decode_and_get(handle, ids, id_len, 1, &decoded2, &len2);
 
 // The caller is responsible for freeing all allocated memory
 tokenizers_free_ids(ids, id_len);
-tokenizers_free_cstring(decoded);
+tokenizers_free_cstring((char*)decoded);
 tokenizers_free_cstring((char*)decoded2);
 tokenizers_free(handle);
 ```
@@ -121,3 +132,5 @@ Artistic License 2.0
 The file at `tests/fixtures/tokenizer.json` is (C) 2025 Mistral AI.
 
 It is extracted from Mistral Nemo, which is an Apache 2.0 licensed model.
+
+The `tiktoken-rs` dependency is MIT licensed.

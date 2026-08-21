@@ -1,6 +1,5 @@
 # === Rust ===
 /target/
-/Cargo.lock
 **/*.rlib
 **/*.dSYM/
 
@@ -74,4 +73,3 @@ __pycache__/
 # === Homebrew builds ===
 *.dSYM/
 *.pkg/
-

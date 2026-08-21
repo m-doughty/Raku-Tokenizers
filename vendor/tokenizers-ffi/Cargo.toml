@@ -1,9 +1,9 @@
 [package]
 name = "tokenizers_ffi"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Matt Doughty <matt@apogee.guru>"]
-description = "FFI wrapper around HuggingFace Tokenizers"
+description = "FFI wrapper around HuggingFace Tokenizers and tiktoken"
 license = "Artistic-2.0"
 include = [
     "src/**",
@@ -16,6 +16,9 @@ include = [
 [dependencies]
 tokenizers = "0.21"  # Adjust version to match your tokenizer.json
 libc = "0.2"
+base64 = "0.22"
+rustc-hash = "2"
+tiktoken-rs = "0.12"
 
 [lib]
 name = "tokenizers_ffi"
@@ -29,4 +32,3 @@ cc = "1.0"
 name = "tokenizers"
 path = "tests/rust/tokenizers.rs"
 harness = true
-

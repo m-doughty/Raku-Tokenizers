@@ -1,74 +1,70 @@
 use Test;
-use lib 'lib';
-use Tokenizers::Wrapper;
+use lib "lib";
 use NativeCall;
+use Tokenizers::Wrapper;
 
-plan 5;
+plan 9;
 
-# Load the JSON tokenizer config
-my $json-path = "t/fixtures/tokenizer.json";
-ok $json-path.IO.e, "Tokenizer fixture exists";
+my Blob $json = slurp("t/fixtures/tokenizer.json").encode("utf8");
+my $tokenizer = tokenizers_new_from_str(
+	nativecast(Pointer[uint8], $json),
+	$json.bytes,
+);
+ok $tokenizer.defined, "JSON tokenizer successfully created";
 
-# Load JSON as bytes
-my $json = Buf.new(slurp('t/fixtures/tokenizer.json').encode('utf8'));
-my $tokenizer = tokenizers_new_from_str(nativecast(Pointer[uint8], $json), $json.bytes);
-ok $tokenizer.defined, "Tokenizer successfully created";
-
-my $text = "Hello, world!".encode('utf8');
-
-# Holders for the returned pointer and length (each holds 1 element)
+my Blob $text = "Hello, world!".encode("utf8");
 my $out-ids = CArray[Pointer[uint32]].new;
-$out-ids[0] = Pointer[uint32];  # dummy init
-
+$out-ids[0] = Pointer[uint32];
 my $out-len = CArray[size_t].new;
 $out-len[0] = 0;
 
-# Call FFI
-tokenizers_encode(
-    $tokenizer,
-    nativecast(Pointer[uint8], $text),
-    $text.bytes,
-    1,
-    $out-ids,
-    $out-len
-);
+is tokenizers_encode(
+	$tokenizer,
+	nativecast(Pointer[uint8], $text),
+	$text.bytes,
+	1,
+	0,
+	$out-ids,
+	$out-len,
+), 0, "encode reports success";
 
-# Retrieve and slice output
 my Pointer[uint32] $ids-raw = $out-ids[0];
-my size_t $num-tokens       = $out-len[0];
-my @ids = $ids-raw[^$num-tokens];
+my size_t $num-tokens = $out-len[0];
+is $num-tokens, 5, "encode returns expected token count";
 
-is @ids.elems, 5, "Got expected number of tokens";
-
-tokenizers_decode($tokenizer, $ids-raw, $num-tokens, 1);
-
+is tokenizers_decode($tokenizer, $ids-raw, $num-tokens, 1), 0,
+	"legacy two-step decode reports success";
 my $out-str = CArray[Pointer[uint8]].new;
 $out-str[0] = Pointer[uint8];
 my $out-str-len = CArray[size_t].new;
 $out-str-len[0] = 0;
-
-tokenizers_get_decode_str($tokenizer, $out-str, $out-str-len);
-
+is tokenizers_get_decode_str($tokenizer, $out-str, $out-str-len), 0,
+	"legacy decoded-string retrieval reports success";
 my Pointer[uint8] $str-raw = $out-str[0];
-my size_t $str-len         = $out-str-len[0];
-my $decoded = $str-raw[^$str-len].map(*.chr).join;
-
-is $decoded, "Hello, world!", "Decoded string (via get_decode_str) matches";
-
+is Buf.new($str-raw[^$out-str-len[0]]).decode("utf8"), "Hello, world!",
+	"legacy decoded string matches";
 tokenizers_free_cstring($str-raw);
 
-$out-str[0]     = Pointer[uint8];
+$out-str[0] = Pointer[uint8];
 $out-str-len[0] = 0;
-
-tokenizers_decode_and_get($tokenizer, $ids-raw, $num-tokens, 1, $out-str, $out-str-len);
-
+is tokenizers_decode_and_get(
+	$tokenizer,
+	$ids-raw,
+	$num-tokens,
+	1,
+	$out-str,
+	$out-str-len,
+), 0, "one-step decode reports success";
 $str-raw = $out-str[0];
-$str-len = $out-str-len[0];
-$decoded = $str-raw[^$str-len].map(*.chr).join;
-
-is $decoded, "Hello, world!", "Decoded string (via decode_and_get) matches";
-
+is Buf.new($str-raw[^$out-str-len[0]]).decode("utf8"), "Hello, world!",
+	"one-step decoded string matches";
 tokenizers_free_cstring($str-raw);
 tokenizers_free_ids($ids-raw, $num-tokens);
 tokenizers_free($tokenizer);
 
+my Blob $bad-json = q[{].encode("utf8");
+my $bad = tokenizers_new_from_str(
+	nativecast(Pointer[uint8], $bad-json),
+	$bad-json.bytes,
+);
+nok $bad.defined, "malformed JSON returns a null handle instead of panicking";

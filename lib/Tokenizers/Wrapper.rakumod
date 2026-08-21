@@ -29,22 +29,34 @@ sub tokenizers_new_from_str(
 	size_t --> TokenizerHandle
 ) is native(&_libpath) is export {}
 
+sub tokenizers_new_from_tiktoken(
+	Pointer[uint8],
+	size_t,
+	Pointer[uint8],
+	size_t,
+	CArray[Pointer[uint8]],
+	CArray[size_t],
+	CArray[uint32],
+	size_t --> TokenizerHandle
+) is native(&_libpath) is export {}
+
 sub tokenizers_encode(
 	TokenizerHandle, 
 	Pointer[uint8], 
 	size_t, 
 	int32,
+	int32,
 	CArray[Pointer[uint32]], 
-	CArray[size_t]
+	CArray[size_t] --> int32
 ) is native(&_libpath) is export {}
 
-sub tokenizers_decode(TokenizerHandle, Pointer[uint32], size_t, int32)
+sub tokenizers_decode(TokenizerHandle, Pointer[uint32], size_t, int32 --> int32)
 	is native(&_libpath) is export {}
 
 sub tokenizers_get_decode_str(
 	TokenizerHandle,
 	CArray[Pointer[uint8]],
-	CArray[size_t]
+	CArray[size_t] --> int32
 ) is native(&_libpath) is export {}
 
 sub tokenizers_decode_and_get(
@@ -53,7 +65,12 @@ sub tokenizers_decode_and_get(
 	size_t, 
 	int32,
 	CArray[Pointer[uint8]],
-	CArray[size_t]
+	CArray[size_t] --> int32
+) is native(&_libpath) is export {}
+
+sub tokenizers_get_last_error(
+	CArray[Pointer[uint8]],
+	CArray[size_t] --> int32
 ) is native(&_libpath) is export {}
 
 sub tokenizers_free(TokenizerHandle) is native(&_libpath) is export {}
@@ -61,4 +78,3 @@ sub tokenizers_free(TokenizerHandle) is native(&_libpath) is export {}
 sub tokenizers_free_cstring(Pointer[uint8]) is native(&_libpath) is export {}
 
 sub tokenizers_free_ids(Pointer[uint32], size_t) is native(&_libpath) is export {}
-

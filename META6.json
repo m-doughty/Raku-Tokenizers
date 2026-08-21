@@ -9,7 +9,7 @@
   "depends": [
     "NativeCall"
   ],
-  "description": "Wrapper module for Huggingface Tokenizers",
+  "description": "Raku bindings for HuggingFace Tokenizers and tiktoken",
   "license": "Artistic-2.0",
   "name": "Tokenizers",
   "provides": {
@@ -30,10 +30,11 @@
   },
   "tags": [
     "tokenizers",
+    "tiktoken",
     "llm",
     "ai"
   ],
   "test-depends": [
   ],
-  "version": "0.2.2"
+  "version": "0.3.0"
 }

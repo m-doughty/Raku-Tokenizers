@@ -44,21 +44,24 @@ START_TEST(test_encode_decode_flow) {
   uint32_t *ids = NULL;
   size_t id_len = 0;
 
-  tokenizers_encode(handle, text, strlen(text), 1, &ids, &id_len);
+  ck_assert_int_eq(tokenizers_encode(handle, text, strlen(text), 1, 0, &ids,
+                                     &id_len),
+                   0);
   ck_assert_ptr_nonnull(ids);
   ck_assert_int_eq(id_len, 5);
 
-  tokenizers_decode(handle, ids, id_len, 1);
+  ck_assert_int_eq(tokenizers_decode(handle, ids, id_len, 1), 0);
 
-  char *decoded = NULL;
+  uint8_t *decoded = NULL;
   size_t decoded_len = 0;
-  tokenizers_get_decode_str(handle, &decoded, &decoded_len);
+  ck_assert_int_eq(tokenizers_get_decode_str(handle, &decoded, &decoded_len),
+                   0);
 
   ck_assert_ptr_nonnull(decoded);
   ck_assert_int_eq(decoded_len, 13);
 
   tokenizers_free_ids(ids, id_len);
-  tokenizers_free_cstring(decoded);
+  tokenizers_free_cstring((char *)decoded);
   tokenizers_free(handle);
   free(json);
 }
@@ -74,13 +77,17 @@ START_TEST(test_decode_and_get) {
   uint32_t *ids = NULL;
   size_t id_len = 0;
 
-  tokenizers_encode(handle, text, strlen(text), 1, &ids, &id_len);
+  ck_assert_int_eq(tokenizers_encode(handle, text, strlen(text), 1, 0, &ids,
+                                     &id_len),
+                   0);
   ck_assert_ptr_nonnull(ids);
 
-  const char *decoded = NULL;
+  uint8_t *decoded = NULL;
   size_t decoded_len = 0;
 
-  tokenizers_decode_and_get(handle, ids, id_len, 1, &decoded, &decoded_len);
+  ck_assert_int_eq(tokenizers_decode_and_get(handle, ids, id_len, 1, &decoded,
+                                             &decoded_len),
+                   0);
   ck_assert_ptr_nonnull(decoded);
   ck_assert_int_eq(decoded_len, 19);
 
